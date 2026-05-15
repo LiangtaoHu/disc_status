@@ -209,3 +209,15 @@ class User {
             });
         }
 };
+
+int main() {
+    const uint64_t APPLICATION_ID = 1;
+    User temp = User(APPLICATION_ID);
+
+    discordpp::ActivityParty party;
+    discordpp::ActivityAssets assets;
+    discordpp::Activity activity;
+    temp.create_party(&party, 1, 4, "1");
+    temp.create_assets(&assets, "https://imgur.com/4V4dkia.gif", std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt);
+    temp.update_activity("SBURB™ BETA", discordpp::ActivityTypes::Playing, "1 Player Entered.", std::nullopt, "Dreaming on Derse.", std::nullopt, assets, std::nullopt, party, std::nullopt);
+}
