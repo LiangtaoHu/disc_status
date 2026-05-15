@@ -6,7 +6,7 @@
 #include <string>
 #include <functional>
 #include <csignal>
-
+#include <chrono>
 
 class User {
     private:
@@ -15,11 +15,26 @@ class User {
         std::string m_refreshToken;
         discordpp::Activity m_currentActivity;
 
+        std::thread m_token_thread;
+        std::atomic<bool> m_running = false;
+        std::atomic<uint32_t> m_expire_time = 0;
+
     public:
         User(uint64_t app_id) {
             m_application_id = app_id;
             m_client = std::make_shared<discordpp::Client>();
+            oauth2_process();
         }
+
+        ~User() {
+            if (m_running) {
+                m_running = false;
+                if (m_token_thread.joinable()) {
+                    m_token_thread.join();
+                }
+            }
+        }
+
         // Oauth2 Process
         // One Function that prompts user to authorize then handles auth code to get tokens.
         // - Auth process first requires AuthorizationArgs: ClientID(?), Scopes [DefaultPresenceScopes], State(?)*, Nonce(?)*, CodeChallenge*, IntegrationType(?)*
@@ -51,11 +66,14 @@ class User {
                         std::string scopes) 
                         {
                             std::cout << "Access Token Received." << std::endl;
+                            m_expire_time = expiresIn;
+                            m_running = true;
                             m_refreshToken = refreshToken;
                             m_client->UpdateToken(tokenType, accessToken, [this](discordpp::ClientResult result) {
                                 if (result.Successful()) {
                                     std::cout << "Updated Access Token Successfully." << std::endl;
                                     m_client->Connect();
+                                    start_background_loop();
                                 } else {
                                     std::cerr << "Failed to update access token: " << result.Error() << std::endl;
                                 }
@@ -76,6 +94,7 @@ class User {
                 std::string scopes) {
                     if (result.Successful()) {
                         m_refreshToken = refreshToken;
+                        m_expire_time = expiresIn;
                         m_client->UpdateToken(tokenType, accessToken, [this](discordpp::ClientResult result) {
                                     if (result.Successful()) {
                                         std::cout << "Updated Access Token Successfully." << std::endl;
@@ -168,6 +187,24 @@ class User {
                     std::cout << "Changed Rich Presence Successfully" << std::endl;
                 } else {
                     std::cout << "Failed to change Rich Presence: " << result.Error() << std::endl;
+                }
+            });
+        }
+        void start_background_loop() {
+            if (m_running) {
+                return;
+            }
+            m_running = true;
+            m_token_thread = std::thread([this]() {
+                while (m_running) {
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                    if (m_expire_time > 0) {
+                        m_expire_time--;
+                    }
+                    if (m_expire_time <= 300) {
+                        std::cout << "Refreshing token" << std::endl;
+                        refresh_tokens();
+                    }
                 }
             });
         }
