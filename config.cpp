@@ -1,7 +1,9 @@
 #include <iostream>
 #include <fstream>
+#include <filesystem>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 enum Activity_Type {
     Playing,
@@ -11,6 +13,16 @@ enum Activity_Type {
     CustomStatus,
     Competing,
     HangStatus
+};
+
+std::unordered_map<std::string, Activity_Type> const activity_type_table = {
+    {"Playing", Activity_Type::Playing},
+    {"Streaming", Activity_Type::Streaming},
+    {"Listening", Activity_Type::Listening},
+    {"Watching", Activity_Type::Watching},
+    {"CustomStatus", Activity_Type::CustomStatus},
+    {"Competing", Activity_Type::Competing},
+    {"HangStatus", Activity_Type::HangStatus},
 };
 
 struct struct_activity {
@@ -24,95 +36,83 @@ struct struct_activity {
         std::string image_link;
     } struct_assets;
     std::string to_string() {
-        return  "\tActivityType: " + std::to_string(type) + 
-                "\n\tState: " + state + 
-                "\n\tDetails: " + details + 
-                "\n\tName: " + name + 
-                "\n\tAssets: " + 
-                    "\n\t\tLarge Image: " + struct_assets.large_image +
-                    "\n\t\tHover-over Text: " + struct_assets.hover_over_text +
-                    "\n\t\tImage Link: " + struct_assets.image_link + "\n"; 
+        return  "ActivityType\t" + std::to_string(type) + 
+                "\nState\t" + state + 
+                "\nDetails\t" + details + 
+                "\nName\t" + name + 
+                "\nLarge Image\t" + struct_assets.large_image +
+                "\nHover-over Text\t" + struct_assets.hover_over_text +
+                "\nImage Link\t" + struct_assets.image_link + "\n"; 
     }
 };
 
-// enum offsets {
-//     ACTIVITY_TYPE_OFFSET = sizeof(char)*sizeof("ActivityType:"),
-//     STATE_OFFSET = sizeof(char)*sizeof("State:"),
-//     DETAILS_OFFSET = sizeof(char)*sizeof("Details:"),
-//     NAME_OFFSET = sizeof(char)*sizeof("Name:"),
-//     LARGE_IMAGE_OFFSET = sizeof(char)*sizeof("\tLarge Image:"),
-//     HOVER_OVER_TEXT_OFFSET = sizeof(char)*sizeof("\tHover-over Text:"),
-//     IMAGE_LINK_OFFSET = sizeof(char)*sizeof("\tImage Link:")
-// };
 
-void load_saved_config(struct_activity* activity) {
-    std::ifstream config_txt("config.txt"); // Simplification?
-    if (config_txt.is_open()) {
-        std::string line;
 
-        std::getline(config_txt, line);
-        activity->type = Activity_Type(std::stoi(line.substr(line.find(":") + 2)));
 
-        std::getline(config_txt, line);
-        activity->state = line.substr(line.find(":") + 2);
+void load_config(struct_activity* activity) {
+    // Read the preset file (guaranteed to exist) and load the values of preset #[config.txt value] into activity
+    // Check if first line is a valid integer
+    std::ofstream preset_file 
+}
 
-        std::getline(config_txt, line);
-        activity->details = line.substr(line.find(":") + 2);
-
-        std::getline(config_txt, line);
-        activity->name = line.substr(line.find(":") + 2);
-
-        std::getline(config_txt, line);
-
-        std::getline(config_txt, line);
-        activity->struct_assets.large_image = line.substr(line.find(":") + 2);
-
-        std::getline(config_txt, line);
-        activity->struct_assets.hover_over_text = line.substr(line.find(":") + 2);
-
-        std::getline(config_txt, line);
-        activity->struct_assets.image_link = line.substr(line.find(":") + 2);
+void load_presets(std::vector<struct_activity*> presets) {
+    // Load all presets saved in presets.txt
+    // Check if every line is valid
+    std::ifstream preset_file("presets.txt");
+    std::string curr_line;
+    struct_activity* new_activity = nullptr;
+    while (std::getline(preset_file, curr_line)) { // Until EOF or blank line
+        if (curr_line == "{") {
+            // Start creating an activity
+            new_activity = new struct_activity;
+        } else if (curr_line == "}") {
+            // End of the activity, push into presets
+            // Make new_activity a null vector again
+            presets.push_back(new_activity);
+            new_activity = nullptr;
+        } else {
+            // If nothing else, check if the current line refers to a valid attribute of an activity then
+            // Format: Attribute Tab Value
+            std::string delimiter = "\t";
+            std::string attribute = curr_line.substr(0, curr_line.find(delimiter));
+            std::string value = curr_line.substr(curr_line.find(delimiter));
+            
+            if (attribute == "ActivityType") {
+                auto it = activity_type_table.find(value);
+                if (it != activity_type_table.end()) {
+                    new_activity->type = it->second;
+                }
+            } else {
+                // All other attributes take string values so we don't need to find a way to do some conversion here
+                // We still need to isolate which attribute it is though so we need a string to attribute lookup
+                // If invalid attribute, skip line
+            }
+        }
     }
 }
 
-void startup(struct_activity* activity) {
-    // Check current directory to see if there's a config.txt & presets.txt 
-    std::ifstream read_preset_file("presets.txt");
-    if (read_preset_file.is_open() != true) {
-        std::ofstream write_preset_file("presets.txt");
-        write_preset_file << "0";
-        write_preset_file.close();
-    }
-    read_preset_file.close();
-
-    std::ifstream read_config_file("config.txt");
-    if (read_config_file.is_open()) {
-        // load_saved_config(activity);
-
+void startup(std::vector<struct_activity*> presets, struct_activity* activity) {
+    if (!std::filesystem::exists("presets.txt")) {
+        std::ofstream preset_file("presets.txt");
+        preset_file << "0";
+        preset_file.close();
     } else {
-        std::ofstream write_config_file("config.txt");
-        write_config_file.close();
+        load_presets(presets);
+    }
+    if (!std::filesystem::exists("config.txt")) {
+        std::ofstream config_file("config.txt");
+        config_file << "-1";
+    } else {
+        load_config(activity);
     }
 }
-
-// void save_activity(struct_activity* activity) {
-//     int new_preset_num = 1;
-//     std::string current_num;
-
-//     std::ifstream read_preset_file("presets.txt");
-//     if (read_preset_file.is_open() && std::getline(read_preset_file, current_num)) {
-//         if (!current_num.empty()) {
-//             new_preset_num = std::stoi(current_num) + 1;
-//         }
-//     }
-//     read_preset_file.close();
-
-//     std::ofstream write_preset_file("presets.txt", std::ios::app);
-//     write_preset_file << "\nPreset #" << new_preset_num << "\n" << activity->to_string();
-//     write_preset_file.close();
-// }
 
 void save_activity(struct_activity* activity) {
+    // Append current activity into the global presets folder
+    // Write activity into presets.txt 
+    // Increment first line of presets.txt which represents the total presets so far
+
+
     std::vector<std::string> lines;
     std::string line;
     int current_count = 0;
@@ -150,13 +150,35 @@ void save_activity(struct_activity* activity) {
     }
 }
 
+void delete_activity(int idx) {
+    // Delete the idx-th element in our preset array
+    // Write array into presets.txt
+};
+
+void use_preset(int idx) {
+    // Using our prests array, we can change our pointer to activity to that instead
+    // Apply changes afterwards
+};
+
+void apply_changes(struct_activity* activity) {
+    // Push towards discord
+}
+
+
 int main() {
     // Create preset file
     // Functions that can delete, load, or save presets
     // Functions that can load a current config
     // -> Asks if you want to save current config after loading
     // Program should automatically load up last used config
-    struct_activity* current_activity = new struct_activity();
+    std::vector<struct_activity*> presets;
+    struct_activity* current_activity;
+    startup(presets, current_activity);
+
+
+
+
+
     // startup(current_activity);
     // current_activity->type = Playing;
     // current_activity->state = "1 Player Entered.";
